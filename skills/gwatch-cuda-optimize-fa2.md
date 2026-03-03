@@ -8,6 +8,10 @@ To achieve this,
 you must adopt a systematic, data-driven optimization strategy, seamlessly alternating between the provided profiling tools to diagnose bottlenecks, formulate hypotheses, apply code modifications, and validate performance gains.
 
 
+## Input
+- `FA_PATH`: The path to the flash-attention codebase, provided by the user when invoking this skill.
+
+
 ## Scope
 Use this when you need to:
 - measure FA2 throughput/FLOPs baseline.
@@ -23,10 +27,10 @@ Target scripts:
 - `examples/cuda/profiler/fa2/do_trace_fa2.py`
 
 Primary optimization source files:
-- `workload/flash-attention/csrc/flash_attn/src/flash_fwd_kernel.h`
-- `workload/flash-attention/csrc/flash_attn/src/flash_fwd_launch_template.h`
-- `workload/flash-attention/csrc/flash_attn/src/kernel_traits.h`
-- `workload/flash-attention/csrc/flash_attn/src/softmax.h`
+- `FA_PATH/csrc/flash_attn/src/flash_fwd_kernel.h`
+- `FA_PATH/csrc/flash_attn/src/flash_fwd_launch_template.h`
+- `FA_PATH/csrc/flash_attn/src/kernel_traits.h`
+- `FA_PATH/csrc/flash_attn/src/softmax.h`
 
 
 ## Tool 1: Baseline FLOPs
@@ -197,7 +201,7 @@ Then,
 you can recompile the instrumented FA2 kernel by:
 
 ```bash
-cd workload/flash-attention/
+cd FA_PATH/
 export FLASH_ATTN_CUDA_ARCHS="80"
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
@@ -318,15 +322,15 @@ Note that:
 
 ## Modify FA2 Source and Rebuild
 Key files related to FlashAttention-2 include but not limited to:
-- `workload/flash-attention/csrc/flash_attn/src/flash_fwd_kernel.h`
-- `workload/flash-attention/csrc/flash_attn/src/flash_fwd_launch_template.h`
-- `workload/flash-attention/csrc/flash_attn/src/kernel_traits.h`
-- `workload/flash-attention/csrc/flash_attn/src/softmax.h`
+- `FA_PATH/csrc/flash_attn/src/flash_fwd_kernel.h`
+- `FA_PATH/csrc/flash_attn/src/flash_fwd_launch_template.h`
+- `FA_PATH/csrc/flash_attn/src/kernel_traits.h`
+- `FA_PATH/csrc/flash_attn/src/softmax.h`
 
 Rebuild command:
 
 ```bash
-cd workload/flash-attention/
+cd FA_PATH/
 export FLASH_ATTN_CUDA_ARCHS="80"
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"

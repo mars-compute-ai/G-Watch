@@ -1,2 +1,4 @@
 *.whl
 workload
+.bash_history
+.python_history

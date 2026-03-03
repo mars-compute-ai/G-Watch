@@ -8,6 +8,10 @@ To achieve this,
 you must adopt a systematic, data-driven optimization strategy, seamlessly alternating between the provided profiling tools to diagnose bottlenecks, formulate hypotheses, apply code modifications, and validate performance gains.
 
 
+## Input
+- `FA_PATH`: The path to the flash-attention codebase, provided by the user when invoking this skill.
+
+
 ## Scope
 Use this when you need to:
 - measure FA3 throughput/FLOPs baseline.
@@ -23,10 +27,10 @@ Target scripts:
 - `examples/cuda/profiler/fa3/do_trace_fa3.py`
 
 Primary optimization source files:
-- `workload/flash-attention/hopper/flash_fwd_kernel_sm90.h`
-- `workload/flash-attention/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
-- `workload/flash-attention/hopper/epilogue_fwd.hpp`
-- `workload/flash-attention/hopper/tile_scheduler.hpp`
+- `FA_PATH/hopper/flash_fwd_kernel_sm90.h`
+- `FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
+- `FA_PATH/hopper/epilogue_fwd.hpp`
+- `FA_PATH/hopper/tile_scheduler.hpp`
 
 
 ## Tool 1: Baseline FLOPs
@@ -189,7 +193,7 @@ Then,
 you can recompile the instrumented FA3 kernel by:
 
 ```bash
-cd workload/flash-attention/hopper/
+cd FA_PATH/hopper/
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"
@@ -310,15 +314,15 @@ Note that:
 
 ## Modify FA3 Source and Rebuild
 Key files related to FlashAttention-3 include but not limited to:
-- `workload/flash-attention/hopper/flash_fwd_kernel_sm90.h`
-- `workload/flash-attention/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
-- `workload/flash-attention/hopper/epilogue_fwd.hpp`
-- `workload/flash-attention/hopper/tile_scheduler.hpp`
+- `FA_PATH/hopper/flash_fwd_kernel_sm90.h`
+- `FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
+- `FA_PATH/hopper/epilogue_fwd.hpp`
+- `FA_PATH/hopper/tile_scheduler.hpp`
 
 Rebuild command:
 
 ```bash
-cd workload/flash-attention/hopper/
+cd FA_PATH/hopper/
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"

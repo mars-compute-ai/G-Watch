@@ -14,32 +14,34 @@ export REPO_PATH=$PWD
 
 All subsequent commands assume you are running from the G-Watch root directory.
 
-## 1. Clone and Build FlashAttention-3
+## 1. Install Prerequisites
 
-Next, clone the FlashAttention repository and check out the known-good commit that this example is tested against:
+Install the required Python packages:
 
 ```bash
-cd $REPO_PATH
-mkdir workload && cd workload
+pip3 install packaging torch torchvision
+```
+
+## 2. Clone and Build FlashAttention-3
+
+Clone the FlashAttention repository and check out the known-good commit that this example is tested against:
+
+```bash
 git clone --recursive https://github.com/Dao-AILab/flash-attention.git
 cd flash-attention
 git checkout d146efff6f3226f465f1b4f089eaefe52c475e9c
 ```
 
-> **Note:** The flash-attention repo must be cloned under `$REPO_PATH/workload/flash-attention`,
-> as this path is hardcoded in the skill.
-
-Next, apply the patch that integrates PTX instrumentation into the FA-3 built binary:
+Next, apply the patch that integrates PTX instrumentation into the FA-3 build:
 
 ```bash
-cd $REPO_PATH/workload/flash-attention
 git apply $REPO_PATH/examples/cuda/fa3/fa3_build_with_ptx.patch
 ```
 
 Now build FA-3. The environment variables below narrow the build scope to keep compilation fast — only the forward-pass kernel with hdim128, FP16, on Hopper is compiled:
 
 ```bash
-cd $REPO_PATH/workload/flash-attention/hopper/
+cd hopper/
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"
@@ -50,7 +52,7 @@ export FLASH_ATTENTION_DISABLE_SM80="TRUE"
 python3 setup.py install
 ```
 
-## 2. Verify the Installation
+## 3. Verify the Installation
 
 Once the build completes, run the FLOPS benchmark to confirm FA-3 is installed and produces valid results:
 
@@ -59,21 +61,17 @@ cd $REPO_PATH/examples/cuda/fa3
 python3 do_flops_fa3.py
 ```
 
-## 3. Install Skills
-
-With the workload ready, install the G-Watch skill definitions that teach the agent how to optimize FA-3:
-
-```bash
-cd $REPO_PATH/skills
-./install_skills.sh
-```
-
 ## 4. Start the Agent Loop
 
-Everything is set up. Launch the optimization agent by running the following slash command inside your code agent:
+Everything is set up.
+Launch the optimization agent by invoking the `gwatch-cuda-optimize-fa3` skill inside your code agent.
+This skill is automatically installed to your code agent when you install G-Watch.
 
 ```bash
-/gwatch-cuda-optimize-fa3
+─────────────────────────────────
+❯ /gwatch-cuda-optimize-fa3
+> FA_PATH is @[THE PATH TO flash-attention]
+─────────────────────────────────
 ```
 
 ## 5. Results

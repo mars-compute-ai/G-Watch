@@ -1,5 +1,7 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # Define a function to run commands with or without sudo
 run_cmd() {
     if [ "$(id -u)" -eq 0 ]; then
@@ -19,14 +21,14 @@ if [ -f /etc/debian_version ]; then
     echo "Detected Ubuntu/Debian system. Installing dependencies..."
     run_cmd apt-get -o APT::Sandbox::User=root update
     run_cmd apt-get -o APT::Sandbox::User=root install -y \
-        curl python3 python3-pip python-is-python3 libelf-dev protobuf-compiler libwebsockets-dev libnuma-dev
+        git curl python3 python3-pip python-is-python3 libelf-dev protobuf-compiler libwebsockets-dev libnuma-dev
     # Update shared library cache
     run_cmd ldconfig
 
 elif [ -f /etc/redhat-release ]; then
     echo "Detected CentOS/RHEL system. Installing dependencies..."
     run_cmd yum install -y \
-        curl python3 python3-pip elfutils-libelf-devel protobuf-compiler libwebsockets-devel numactl-devel
+        git curl python3 python3-pip elfutils-libelf-devel protobuf-compiler libwebsockets-devel numactl-devel
     # Update shared library cache
     run_cmd ldconfig
 else
@@ -69,9 +71,54 @@ run_cmd python3 -m pip install "$WHL_FILE" --break-system-packages
 
 # 6. Cleanup
 if [ $? -eq 0 ]; then
-    echo "Installation successful."
+    echo "Wheel installation successful."
     rm "$WHL_FILE"
 else
-    echo "Installation failed. Check permissions or dependencies."
+    echo "Wheel installation failed. Check permissions or dependencies."
     exit 1
 fi
+
+# 7. Install AI Agent Skills
+SKILLS_SOURCE="$SCRIPT_DIR/skills"
+CLAUDE_DIR=".claude/skills"
+CODEX_DIR=".codex/skills"
+GEMINI_DIR=".gemini/skills"
+
+sync_skills() {
+    local target_path=$1
+    local tool_name=$2
+
+    echo "Syncing skills for $tool_name..."
+
+    for file in "$SKILLS_SOURCE"/*.md; do
+        if [ -f "$file" ]; then
+            local filename=$(basename "$file" .md)
+            local skill_subdir="$target_path/$filename"
+
+            mkdir -p "$skill_subdir"
+
+            cat <<EOF > "$skill_subdir/SKILL.md"
+---
+name: $filename
+description: Instruction set for $filename
+---
+$(cat "$file")
+EOF
+            echo "Installed: $filename to $skill_subdir"
+        fi
+    done
+}
+
+if [ -d "$SKILLS_SOURCE" ]; then
+    mkdir -p "$CLAUDE_DIR" "$CODEX_DIR" "$GEMINI_DIR"
+
+    sync_skills "$CLAUDE_DIR" "Claude Code"
+    sync_skills "$CODEX_DIR" "Codex"
+    sync_skills "$GEMINI_DIR" "Gemini CLI"
+
+    echo "Skills installation complete for all supported CLI tools."
+else
+    echo "Warning: Skills directory '$SKILLS_SOURCE' not found. Skipping skills installation."
+fi
+
+echo "Installation complete."
