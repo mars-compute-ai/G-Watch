@@ -50,7 +50,7 @@ REPO="mars-compute-ai/G-Watch"
 API_URL="https://api.github.com/repos/$REPO/releases/latest"
 
 echo "Fetching latest release metadata from GitHub..."
-WHL_URL=$(curl -s $API_URL | grep "browser_download_url" | grep "gwatch_${GPU_TYPE}" | grep "manylinux2014_x86_64.whl" | cut -d '"' -f 4 | head -n 1)
+WHL_URL=$(curl -s $API_URL | grep "browser_download_url" | grep "gwatch_${GPU_TYPE}_" | grep "manylinux2014_x86_64.whl" | cut -d '"' -f 4 | head -n 1)
 
 if [ -z "$WHL_URL" ]; then
     echo "Error: Could not find a matching $GPU_TYPE wheel in the latest release."
