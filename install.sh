@@ -19,7 +19,7 @@ if [ -f /etc/debian_version ]; then
     echo "Detected Ubuntu/Debian system. Installing dependencies..."
     run_cmd apt-get -o APT::Sandbox::User=root update
     run_cmd apt-get -o APT::Sandbox::User=root install -y \
-        curl python3 python3-pip libelf-dev protobuf-compiler libwebsockets-dev libnuma-dev
+        curl python3 python3-pip python-is-python3 libelf-dev protobuf-compiler libwebsockets-dev libnuma-dev
     # Update shared library cache
     run_cmd ldconfig
 
