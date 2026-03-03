@@ -1,97 +1,85 @@
-# FlashAttention3 Profiling Examples
+# Agentic FlashAttention-3 Optimization
 
-This directory contains simple scripts that profile FlashAttention3 kernels using G-Watch:
-- range profiling via `do_range_profile`
-- PC sampling via `do_pc_sampling`
-- kernel tracing via `do_trace`
+This guide walks you through setting up FlashAttention-3 and using the G-Watch agent to automatically optimize its CUDA kernels.
 
-Both scripts must be executed with G-Watch runtime injection.
+## 0. Clone G-Watch
 
-## Range Profiling (do_range_profile)
-
-Forward pass, default settings:
+Start by cloning the G-Watch repository and navigating into it:
 
 ```bash
-gwatch profile python3 do_range_profile_fa3.py
+git clone https://github.com/mars-compute-ai/G-Watch.git
+cd G-Watch
+export REPO_PATH=$PWD
 ```
 
-Backward pass, causal, custom size:
+All subsequent commands assume you are running from the G-Watch root directory.
+
+## 1. Clone and Build FlashAttention-3
+
+Next, clone the FlashAttention repository and check out the known-good commit that this example is tested against:
 
 ```bash
-gwatch profile python3 do_range_profile_fa3.py \
-  --backward --causal --seqlen 4096 --nheads 32 --headdim 128 \
-  --metrics FBSP.TriageCompute.dramc__cycles_elapsed.avg \
-  --kernel-regex ".*flash.*" \
-  --dump-path ./fa3_range_profile.gwatch
+cd $REPO_PATH
+mkdir workload && cd workload
+git clone --recursive https://github.com/Dao-AILab/flash-attention.git
+cd flash-attention
+git checkout d146efff6f3226f465f1b4f089eaefe52c475e9c
 ```
 
-View the `.gwatch` result:
+> **Note:** The flash-attention repo must be cloned under `$REPO_PATH/workload/flash-attention`,
+> as this path is hardcoded in the skill.
+
+Next, apply the patch that integrates PTX instrumentation into the FA-3 built binary:
 
 ```bash
-gwatch show ./fa3_range_profile.gwatch --mode range_profile
+cd $REPO_PATH/workload/flash-attention
+git apply $REPO_PATH/examples/cuda/fa3/fa3_build_with_ptx.patch
 ```
 
-## PC Sampling (do_pc_sampling)
-
-Default:
+Now build FA-3. The environment variables below narrow the build scope to keep compilation fast — only the forward-pass kernel with hdim128, FP16, on Hopper is compiled:
 
 ```bash
-gwatch profile python3 do_pc_sampling_fa3.py
+cd $REPO_PATH/workload/flash-attention/hopper/
+export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
+export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
+export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"
+export FLASH_ATTENTION_DISABLE_HDIM256="TRUE"
+export FLASH_ATTENTION_DISABLE_BACKWARD="TRUE"
+export FLASH_ATTENTION_DISABLE_FP8="TRUE"
+export FLASH_ATTENTION_DISABLE_SM80="TRUE"
+python3 setup.py install
 ```
 
-Custom kernel filter and repetition:
+## 2. Verify the Installation
+
+Once the build completes, run the FLOPS benchmark to confirm FA-3 is installed and produces valid results:
 
 ```bash
-gwatch profile python3 do_pc_sampling_fa3.py \
-  --rep 100 --kernel-regex ".*flash.*" \
-  --dump-path ./fa3_pc_sampling.gwatch
-```
-
-View the `.gwatch` result:
-
-```bash
-gwatch show ./fa3_pc_sampling.gwatch --mode pc_sampling
-```
-
-## Tracing (do_trace)
-
-Default:
-
-```bash
-gwatch profile python3 do_trace_fa3.py
-```
-
-Custom kernel filter and output:
-
-```bash
-gwatch profile python3 do_trace_fa3.py \
-  --kernel-regex ".*flash.*" \
-  --dump-path ./fa3_trace.gwatch
-```
-
-View the `.gwatch` result:
-
-```bash
-gwatch show ./fa3_trace.gwatch --mode trace
-```
-
-## FLOPs (do_flops)
-
-Default:
-
-```bash
+cd $REPO_PATH/examples/cuda/fa3
 python3 do_flops_fa3.py
 ```
 
-Custom size and repetitions:
+## 3. Install Skills
+
+With the workload ready, install the G-Watch skill definitions that teach the agent how to optimize FA-3:
 
 ```bash
-python3 do_flops_fa3.py \
-  --batch 8 --seqlen 4096 --nheads 32 --headdim 128 \
-  --dtype bf16 --rep 100
+cd $REPO_PATH/skills
+./install_skills.sh
 ```
 
-## Notes
+## 4. Start the Agent Loop
 
-- These scripts expect FlashAttention3 to be available at `/root/workload/flash-attention/hopper`.
-- Use `--dtype bf16` or `--dtype fp16` to match your kernel support.
+Everything is set up. Launch the optimization agent by running the following slash command inside your code agent:
+
+```bash
+/gwatch-cuda-optimize-fa3
+```
+
+## 5. Results
+
+We ran the agent through this workflow multiple times and it successfully optimized the FA-3 kernel:
+
+<div align="center">
+    <img src="../../../docs/fa3.png" alt="FA-3 optimization results" width="100%" />
+</div>

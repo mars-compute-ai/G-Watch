@@ -1,100 +1,76 @@
-# FlashAttention2 Profiling Examples
+# Agentic FlashAttention-2 Optimization
 
-This directory contains simple scripts that profile FlashAttention2 (SM80, A100) kernels using G-Watch:
-- range profiling via `do_range_profile`
-- PC sampling via `do_pc_sampling`
-- kernel tracing via `do_trace`
-- FLOPs measurement via `do_flops`
+This guide walks you through setting up FlashAttention-2 and using the G-Watch agent to automatically optimize its CUDA kernels on Ampere.
 
-Profiling scripts must be executed with G-Watch runtime injection.
+## 0. Clone G-Watch
 
-## Range Profiling (do_range_profile)
-
-Forward pass, default settings:
+Start by cloning the G-Watch repository and navigating into it:
 
 ```bash
-gwatch profile python3 do_range_profile_fa2.py
+git clone https://github.com/mars-compute-ai/G-Watch.git
+cd G-Watch
+export REPO_PATH=$PWD
 ```
 
-Backward pass, causal, custom size:
+All subsequent commands assume you are running from the G-Watch root directory.
+
+## 1. Clone and Build FlashAttention-2
+
+Next, clone the FlashAttention repository and check out the known-good commit that this example is tested against:
 
 ```bash
-gwatch profile python3 do_range_profile_fa2.py \
-  --backward --causal --seqlen 4096 --nheads 32 --headdim 128 \
-  --metrics sm__cycles_active.avg.pct_of_peak_sustained_elapsed \
-  --kernel-regex ".*flash.*" \
-  --dump-path ./fa2_range_profile.gwatch
+cd $REPO_PATH
+mkdir workload && cd workload
+git clone --recursive https://github.com/Dao-AILab/flash-attention.git
+cd flash-attention
+git checkout d146efff6f3226f465f1b4f089eaefe52c475e9c
 ```
 
-View the `.gwatch` result:
+> **Note:** The flash-attention repo must be cloned under `$REPO_PATH/workload/flash-attention`,
+> as this path is hardcoded in the skill.
+
+Next, apply the patch that enables a fast, scoped build for FA-2 with trace instrumentation:
 
 ```bash
-gwatch show ./fa2_range_profile.gwatch --mode range_profile
+cd $REPO_PATH/workload/flash-attention
+git apply $REPO_PATH/examples/cuda/fa2/fa2_fast_build.patch
 ```
 
-## PC Sampling (do_pc_sampling)
-
-Default:
+Now build FA-2. The environment variables below narrow the build scope to keep compilation fast — only the forward-pass kernel with hdim256, BF16, on Ampere (sm80) is compiled:
 
 ```bash
-gwatch profile python3 do_pc_sampling_fa2.py
+cd $REPO_PATH/workload/flash-attention/
+export FLASH_ATTN_CUDA_ARCHS="80"
+export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
+export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
+export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"
+export FLASH_ATTENTION_DISABLE_BACKWARD="TRUE"
+export FLASH_ATTENTION_DISABLE_FP8="TRUE"
+python3 setup.py install
 ```
 
-Custom kernel filter and repetition:
+## 2. Verify the Installation
+
+Once the build completes, run the FLOPS benchmark to confirm FA-2 is installed and produces valid results:
 
 ```bash
-gwatch profile python3 do_pc_sampling_fa2.py \
-  --rep 100 --kernel-regex ".*flash.*" \
-  --dump-path ./fa2_pc_sampling.gwatch
-```
-
-View the `.gwatch` result:
-
-```bash
-gwatch show ./fa2_pc_sampling.gwatch --mode pc_sampling
-```
-
-## Tracing (do_trace)
-
-Default:
-
-```bash
-gwatch profile python3 do_trace_fa2.py
-```
-
-Custom kernel filter and output:
-
-```bash
-gwatch profile python3 do_trace_fa2.py \
-  --kernel-regex ".*flash.*" \
-  --dump-path ./fa2_trace.gwatch
-```
-
-View the `.gwatch` result:
-
-```bash
-gwatch show ./fa2_trace.gwatch --mode trace
-```
-
-## FLOPs (do_flops)
-
-Default:
-
-```bash
+cd $REPO_PATH/examples/cuda/fa2
 python3 do_flops_fa2.py
 ```
 
-Custom size and repetitions:
+## 3. Install Skills
+
+With the workload ready, install the G-Watch skill definitions that teach the agent how to optimize FA-2:
 
 ```bash
-python3 do_flops_fa2.py \
-  --batch 8 --seqlen 4096 --nheads 32 --headdim 128 \
-  --dtype bf16 --rep 100
+cd $REPO_PATH/skills
+./install_skills.sh
 ```
 
-## Notes
+## 4. Start the Agent
 
-- These scripts require the `flash-attn` package (v2.x) to be installed.
-- FA2 targets SM80 (A100) GPUs. On Hopper GPUs, FA2 kernels still run but use SM80 code paths.
-- Use `--dtype bf16` or `--dtype fp16` to match your kernel support.
-- The same model config files (llama4, qwen3, qwen3.5) are shared with FA3 examples for GQA sweeps.
+Everything is set up. Launch the optimization agent by running the following slash command inside your code agent:
+
+```bash
+/gwatch-cuda-optimize-fa2
+```
