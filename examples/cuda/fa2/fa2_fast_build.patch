@@ -1,0 +1,137 @@
+diff --git a/csrc/flash_attn/src/flash_fwd_kernel.h b/csrc/flash_attn/src/flash_fwd_kernel.h
+index d492c87..8271408 100644
+--- a/csrc/flash_attn/src/flash_fwd_kernel.h
++++ b/csrc/flash_attn/src/flash_fwd_kernel.h
+@@ -20,6 +20,7 @@
+ #include "mask.h"
+ #include "dropout.h"
+ #include "rotary.h"
++#include "gwatch/cuda/trace.hpp"
+ 
+ namespace FLASH_NAMESPACE {
+ 
+@@ -378,28 +379,39 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
+     for (; n_block >= n_block_min; --n_block) {
+         Tensor acc_s = partition_fragment_C(tiled_mma, Shape<Int<kBlockM>, Int<kBlockN>>{});  // (MMA=4, MMA_M, MMA_N)
+         clear(acc_s);
++        GWATCH_CUDA_KERNEL_SCOPE_START(100);
+         FLASH_NAMESPACE::cp_async_wait<0>();
+         __syncthreads();
++        GWATCH_CUDA_KERNEL_SCOPE_END(100);
++        GWATCH_CUDA_KERNEL_SCOPE_START(110);
+         FLASH_NAMESPACE::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tVgV(_, _, _, n_block), tVsV, tKVcKV, tKVpKV);
+         cute::cp_async_fence();
++        GWATCH_CUDA_KERNEL_SCOPE_END(110);
+ 
++        GWATCH_CUDA_KERNEL_SCOPE_START(130);
+         FLASH_NAMESPACE::gemm</*A_in_regs=*/Kernel_traits::Is_Q_in_regs>(
+             acc_s, tSrQ, tSrK, tSsQ, tSsK, tiled_mma, smem_tiled_copy_Q, smem_tiled_copy_K,
+             smem_thr_copy_Q, smem_thr_copy_K
+         );
++        GWATCH_CUDA_KERNEL_SCOPE_END(130);
+         if constexpr (Is_softcap){
+             FLASH_NAMESPACE::apply_softcap(acc_s, params.softcap);
+         }
+ 
++        GWATCH_CUDA_KERNEL_SCOPE_START(101);
+         FLASH_NAMESPACE::cp_async_wait<0>();
+         __syncthreads();
++        GWATCH_CUDA_KERNEL_SCOPE_END(101);
++        GWATCH_CUDA_KERNEL_SCOPE_START(120);
+         if (n_block > n_block_min) {
+             FLASH_NAMESPACE::copy</*Is_even_MN=*/true, Is_even_K>(gmem_tiled_copy_QKV, tKgK(_, _, _, n_block - 1), tKsK, tKVcKV, tKVpKV);
+             // This cp_async_fence needs to be in the if block, otherwise the synchronization
+             // isn't right and we get race conditions.
+             cute::cp_async_fence();
+         }
++        GWATCH_CUDA_KERNEL_SCOPE_END(120);
+ 
++        GWATCH_CUDA_KERNEL_SCOPE_START(140);
+         mask.template apply_mask</*Causal_mask=*/false>(
+             acc_s, n_block * kBlockN, m_block * kBlockM + (tidx / 32) * 16 + (tidx % 32) / 4, kNWarps * 16
+         );
+@@ -407,6 +419,7 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
+         softmax.template softmax_rescale_o</*Is_first=*/false, /*Check_inf=*/Is_local>(acc_s, acc_o, params.scale_softmax_log2);
+ 
+         Tensor rP = FLASH_NAMESPACE::convert_type<Element>(acc_s);
++        GWATCH_CUDA_KERNEL_SCOPE_END(140);
+         int block_row_idx = m_block * (kBlockM / 16) + tidx / 32;
+         int block_col_idx = n_block * (kBlockN / 32);
+         if (Return_softmax) {
+@@ -425,7 +438,9 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
+         // Reshape rP from (MMA=4, MMA_M, MMA_N) to ((4, 2), MMA_M, MMA_N / 2)
+         // if using m16n8k16 or (4, MMA_M, MMA_N) if using m16n8k8.
+         Tensor tOrP = make_tensor(rP.data(), FLASH_NAMESPACE::convert_layout_acc_Aregs<typename Kernel_traits::TiledMma>(rP.layout()));
++        GWATCH_CUDA_KERNEL_SCOPE_START(150);
+         FLASH_NAMESPACE::gemm_rs(acc_o, tOrP, tOrVt, tOsVt, tiled_mma, smem_tiled_copy_V, smem_thr_copy_V);
++        GWATCH_CUDA_KERNEL_SCOPE_END(150);
+     }
+ 
+     // Epilogue
+diff --git a/csrc/flash_attn/src/softmax.h b/csrc/flash_attn/src/softmax.h
+index 01589ad..6d936b8 100644
+--- a/csrc/flash_attn/src/softmax.h
++++ b/csrc/flash_attn/src/softmax.h
+@@ -139,30 +139,46 @@ struct Softmax {
+         Tensor scores = make_tensor(acc_s.data(), FLASH_NAMESPACE::convert_layout_acc_rowcol(acc_s.layout()));
+         static_assert(decltype(size<0>(scores))::value == kNRows);
+         if (Is_first) {
+-            FLASH_NAMESPACE::template reduce_max</*zero_init=*/true>(scores, row_max);
+-            FLASH_NAMESPACE::scale_apply_exp2(scores, row_max, softmax_scale_log2);
+-            FLASH_NAMESPACE::reduce_sum</*zero_init=*/true>(scores, row_sum);
++            FLASH_NAMESPACE::max_scale_exp2_sum</*zero_init=*/true>(scores, row_max, row_sum, softmax_scale_log2);
+         } else {
+-            Tensor scores_max_prev = make_fragment_like(row_max);
+-            cute::copy(row_max, scores_max_prev);
+-            FLASH_NAMESPACE::template reduce_max</*zero_init=*/false>(scores, row_max);
+             // Reshape acc_o from (MMA=4, MMA_M, MMA_K) to (nrow=(2, MMA_M), ncol=(2, MMA_K))
+             Tensor acc_o_rowcol = make_tensor(acc_o.data(), FLASH_NAMESPACE::convert_layout_acc_rowcol(acc_o.layout()));
+             static_assert(decltype(size<0>(acc_o_rowcol))::value == kNRows);
++            // Fused: find new max, rescale old acc_o & row_sum, apply exp2 to scores, accumulate row_sum
+             #pragma unroll
+-            for (int mi = 0; mi < size(row_max); ++mi) {
++            for (int mi = 0; mi < size<0>(scores); ++mi) {
++                float scores_max_prev = row_max(mi);
++                // Thread-local max reduction
++                float scores_max_new = scores(mi, 0);
++                #pragma unroll
++                for (int ni = 1; ni < size<1>(scores); ++ni) {
++                    scores_max_new = max(scores_max_new, scores(mi, ni));
++                }
++                // Quad-warp allreduce for max
++                MaxOp<float> max_op;
++                scores_max_new = Allreduce<4>::run(scores_max_new, max_op);
++                // Take max of old and new
++                scores_max_new = max(scores_max_prev, scores_max_new);
++                row_max(mi) = scores_max_new;
++
+                 float scores_max_cur = !Check_inf
+-                    ? row_max(mi)
+-                    : (row_max(mi) == -INFINITY ? 0.0f : row_max(mi));
+-                float scores_scale = exp2f((scores_max_prev(mi) - scores_max_cur) * softmax_scale_log2);
+-                row_sum(mi) *= scores_scale;
++                    ? scores_max_new
++                    : (scores_max_new == -INFINITY ? 0.0f : scores_max_new);
++                // Skip rescale if max hasn't changed (common in steady state)
++                if (scores_max_prev != scores_max_cur) {
++                    float scores_scale = exp2f((scores_max_prev - scores_max_cur) * softmax_scale_log2);
++                    row_sum(mi) *= scores_scale;
++                    #pragma unroll
++                    for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) { acc_o_rowcol(mi, ni) *= scores_scale; }
++                }
++                // Apply exp2 to scores and accumulate sum in single pass
++                const float max_scaled = scores_max_cur == -INFINITY ? 0.f : scores_max_cur * softmax_scale_log2;
+                 #pragma unroll
+-                for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) { acc_o_rowcol(mi, ni) *= scores_scale; }
++                for (int ni = 0; ni < size<1>(scores); ++ni) {
++                    scores(mi, ni) = exp2f(scores(mi, ni) * softmax_scale_log2 - max_scaled);
++                    row_sum(mi) += scores(mi, ni);
++                }
+             }
+-            FLASH_NAMESPACE::scale_apply_exp2(scores, row_max, softmax_scale_log2);
+-            // We don't do the reduce across threads here since we don't need to use the row_sum.
+-            // We do that reduce at the end when we need to normalize the softmax.
+-            FLASH_NAMESPACE::reduce_sum</*zero_init=*/false>(scores, row_sum);
+         }
+     };
+ 
