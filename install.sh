@@ -65,7 +65,7 @@ curl -L --progress-bar "$WHL_URL" -o "$WHL_FILE"
 
 # 5. Install using pip
 echo "Installing $WHL_FILE..."
-run_cmd python3 -m pip install "$WHL_FILE"
+run_cmd python3 -m pip install "$WHL_FILE" --break-system-packages
 
 # 6. Cleanup
 if [ $? -eq 0 ]; then
