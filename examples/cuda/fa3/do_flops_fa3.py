@@ -1,0 +1,170 @@
+import argparse
+import json
+import os
+import sys
+
+import torch
+
+
+# Add flash-attention (v3) to sys.path
+sys.path.append("/root/workload/flash-attention")
+sys.path.append("/root/workload/flash-attention/hopper")
+
+try:
+    from flash_attn_interface import flash_attn_func as flash_attn_func_v3
+except ImportError:
+    flash_attn_func_v3 = None
+
+def _parse_dtype(name: str) -> torch.dtype:
+    name = name.lower()
+    if name in ("bf16", "bfloat16"):
+        return torch.bfloat16
+    if name in ("fp16", "float16", "half"):
+        return torch.float16
+    if name in ("fp32", "float32"):
+        return torch.float32
+    raise ValueError(f"Unsupported dtype: {name}")
+
+
+def _flops(batch, nheads, seqlen_q, seqlen_k, headdim, headdim_v, causal=False, window_size=(-1, -1)):
+    if causal:
+        avg_seqlen = (max(0, seqlen_k - seqlen_q) + seqlen_k) / 2
+    else:
+        if window_size == (-1, -1):
+            avg_seqlen = seqlen_k
+        else:
+            row_idx = torch.arange(seqlen_q, device="cuda")
+            col_left = torch.maximum(row_idx + seqlen_k - seqlen_q - window_size[0], torch.tensor(0, device="cuda"))
+            col_right = torch.minimum(
+                row_idx + seqlen_k - seqlen_q + window_size[1], torch.tensor(seqlen_k - 1, device="cuda")
+            )
+            avg_seqlen = (col_right - col_left + 1).float().mean().item()
+    return batch * nheads * 2 * seqlen_q * avg_seqlen * (headdim + headdim_v)
+
+
+def _time_ms(fn, warmup, rep):
+    for _ in range(warmup):
+        fn()
+    torch.cuda.synchronize()
+
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+    for _ in range(rep):
+        fn()
+    end.record()
+    torch.cuda.synchronize()
+    return start.elapsed_time(end) / rep
+
+
+def _load_model_heads(config_path: str):
+    if not config_path:
+        raise ValueError("config_path is required")
+    resolved = config_path
+    if not os.path.isabs(resolved):
+        candidate = os.path.join(os.path.dirname(__file__), "config", resolved)
+        if os.path.exists(resolved):
+            resolved = resolved
+        else:
+            resolved = candidate
+    if not os.path.exists(resolved):
+        raise FileNotFoundError(f"model config not found: {resolved}")
+    with open(resolved, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    text_cfg = cfg.get("text_config", cfg)
+    q_heads = int(text_cfg["num_attention_heads"])
+    kv_heads = int(text_cfg["num_key_value_heads"])
+    return q_heads, kv_heads, resolved
+
+
+def _resolve_heads(args):
+    resolved_config = None
+    if args.model_config:
+        cfg_q, cfg_kv, resolved_config = _load_model_heads(args.model_config)
+    else:
+        cfg_q, cfg_kv = None, None
+
+    q_heads = args.q_heads
+    if q_heads is None:
+        q_heads = args.nheads if args.nheads is not None else cfg_q
+    kv_heads = args.kv_heads if args.kv_heads is not None else cfg_kv
+    if q_heads is None:
+        q_heads = 16
+    if kv_heads is None:
+        kv_heads = q_heads
+
+    if q_heads <= 0 or kv_heads <= 0:
+        raise ValueError(f"Invalid heads: q_heads={q_heads}, kv_heads={kv_heads}")
+    if q_heads % kv_heads != 0:
+        raise ValueError(f"q_heads must be divisible by kv_heads, got q_heads={q_heads}, kv_heads={kv_heads}")
+
+    return q_heads, kv_heads, resolved_config
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Measure FlashAttention3 FLOPs and throughput.")
+    parser.add_argument("--device-id", type=int, default=0)
+    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--seqlen", type=int, default=8192)
+    parser.add_argument("--nheads", type=int, default=None, help="Legacy alias for --q-heads.")
+    parser.add_argument("--q-heads", type=int, default=None, help="Number of query heads.")
+    parser.add_argument("--kv-heads", type=int, default=None, help="Number of key/value heads.")
+    parser.add_argument(
+        "--model-config",
+        type=str,
+        default=None,
+        help="JSON config path defining `num_attention_heads` and `num_key_value_heads` (relative paths may reference config/).",
+    )
+    parser.add_argument("--headdim", type=int, default=128)
+    parser.add_argument("--dtype", type=str, default="bf16")
+    parser.add_argument("--causal", action="store_true")
+    parser.add_argument("--warmup", type=int, default=10)
+    parser.add_argument("--rep", type=int, default=50)
+    args = parser.parse_args()
+
+    if flash_attn_func_v3 is None:
+        raise RuntimeError("FlashAttention v3 not found. Check /root/workload/flash-attention/hopper.")
+
+    device = f"cuda:{args.device_id}"
+    dtype = _parse_dtype(args.dtype)
+    q_heads, kv_heads, resolved_config = _resolve_heads(args)
+
+    q = torch.randn(args.batch, args.seqlen, q_heads, args.headdim, device=device, dtype=dtype)
+    k = torch.randn(args.batch, args.seqlen, kv_heads, args.headdim, device=device, dtype=dtype)
+    v = torch.randn(args.batch, args.seqlen, kv_heads, args.headdim, device=device, dtype=dtype)
+
+    def run_once():
+        with torch.no_grad():
+            _ = flash_attn_func_v3(q, k, v, causal=args.causal)
+
+    avg_ms = _time_ms(run_once, warmup=args.warmup, rep=args.rep)
+    total_flops = _flops(
+        batch=args.batch,
+        nheads=q_heads,
+        seqlen_q=args.seqlen,
+        seqlen_k=args.seqlen,
+        headdim=args.headdim,
+        headdim_v=args.headdim,
+        causal=args.causal,
+    )
+    tflops = total_flops / (avg_ms * 1e-3) / 1e12
+
+    summary = {
+        "batch": args.batch,
+        "seqlen": args.seqlen,
+        "q_heads": q_heads,
+        "kv_heads": kv_heads,
+        "gqa_ratio": q_heads // kv_heads,
+        "model_config": resolved_config,
+        "headdim": args.headdim,
+        "dtype": str(dtype).replace("torch.", ""),
+        "causal": args.causal,
+        "avg_ms": avg_ms,
+        "total_flops": total_flops,
+        "tflops": tflops,
+    }
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()
