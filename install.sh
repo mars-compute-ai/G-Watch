@@ -3,10 +3,10 @@
 # Define a function to run commands with or without sudo
 run_cmd() {
     if [ "$(id -u)" -eq 0 ]; then
-        "$@"
+        DEBIAN_FRONTEND=noninteractive "$@"
     else
         if command -v sudo > /dev/null 2>&1; then
-            sudo "$@"
+            sudo DEBIAN_FRONTEND=noninteractive "$@"
         else
             echo "Error: This script requires root privileges, but sudo is not installed."
             exit 1
