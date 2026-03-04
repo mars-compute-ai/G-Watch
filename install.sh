@@ -78,23 +78,37 @@ else
     exit 1
 fi
 
-# 7. Install AI Agent Skills
-SKILLS_SOURCE="$SCRIPT_DIR/skills"
+# 7. Install AI Agent Skills from GitHub
+SKILLS_API_URL="https://api.github.com/repos/$REPO/contents/skills"
 CLAUDE_DIR=".claude/skills"
 CODEX_DIR=".codex/skills"
 GEMINI_DIR=".gemini/skills"
 
-sync_skills() {
-    local target_path=$1
-    local tool_name=$2
+echo "Fetching skills list from GitHub..."
+SKILLS_JSON=$(curl -s "$SKILLS_API_URL")
 
-    echo "Syncing skills for $tool_name..."
+# Extract .md file names and download URLs
+SKILL_FILES=$(echo "$SKILLS_JSON" | grep -oP '"name"\s*:\s*"\K[^"]+\.md')
 
-    for file in "$SKILLS_SOURCE"/*.md; do
-        if [ -f "$file" ]; then
-            local filename=$(basename "$file" .md)
-            local skill_subdir="$target_path/$filename"
+if [ -z "$SKILL_FILES" ]; then
+    echo "Warning: No skill files found in $REPO/skills. Skipping skills installation."
+else
+    mkdir -p "$CLAUDE_DIR" "$CODEX_DIR" "$GEMINI_DIR"
 
+    for md_file in $SKILL_FILES; do
+        filename="${md_file%.md}"
+        raw_url="https://raw.githubusercontent.com/$REPO/main/skills/$md_file"
+
+        echo "Downloading skill: $md_file..."
+        content=$(curl -s "$raw_url")
+
+        if [ -z "$content" ]; then
+            echo "Warning: Failed to download $md_file. Skipping."
+            continue
+        fi
+
+        for target_path in "$CLAUDE_DIR" "$CODEX_DIR" "$GEMINI_DIR"; do
+            skill_subdir="$target_path/$filename"
             mkdir -p "$skill_subdir"
 
             cat <<EOF > "$skill_subdir/SKILL.md"
@@ -102,23 +116,14 @@ sync_skills() {
 name: $filename
 description: Instruction set for $filename
 ---
-$(cat "$file")
+$content
 EOF
-            echo "Installed: $filename to $skill_subdir"
-        fi
+        done
+
+        echo "Installed: $filename"
     done
-}
-
-if [ -d "$SKILLS_SOURCE" ]; then
-    mkdir -p "$CLAUDE_DIR" "$CODEX_DIR" "$GEMINI_DIR"
-
-    sync_skills "$CLAUDE_DIR" "Claude Code"
-    sync_skills "$CODEX_DIR" "Codex"
-    sync_skills "$GEMINI_DIR" "Gemini CLI"
 
     echo "Skills installation complete for all supported CLI tools."
-else
-    echo "Warning: Skills directory '$SKILLS_SOURCE' not found. Skipping skills installation."
 fi
 
 echo "Installation complete."
