@@ -9,7 +9,7 @@ All subsequent commands assume you are running within the docker container envir
 Install the required Python packages:
 
 ```bash
-pip3 install packaging torch torchvision --break-system-packages
+pip3 install packaging torch torchvision ninja --break-system-packages
 ```
 
 ## 2. Clone and Build FlashAttention-3

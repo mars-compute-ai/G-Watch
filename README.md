@@ -63,6 +63,8 @@ It features rich **Profiling** and **Program Analysis** capabilities on both NVI
     curl -sSL https://raw.githubusercontent.com/mars-compute-ai/G-Watch/main/install.sh | bash
     ```
 
+    Furthermore, you could install your prefer code agent inside your container as well.
+
 
 ## Examples
 
