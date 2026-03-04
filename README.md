@@ -12,11 +12,57 @@ It features rich **Profiling** and **Program Analysis** capabilities on both NVI
 
 ## Installation
 
-To get started, run:
+1. Clone repository
 
-```bash
-curl -sSL https://raw.githubusercontent.com/mars-compute-ai/G-Watch/main/install.sh | bash
-```
+    ```bash
+    # clone repository
+    git clone https://github.com/mars-compute-ai/G-Watch
+    cd G-Watch/scripts/docker
+    ```
+
+2. Create docker container
+
+- For CUDA platform
+    ```bash
+    # start a CUDA 12.8 docker container with id 1,
+    # the container name would be gw_${user_name}_cuda_12_8_1
+    bash run_cuda_12_8.sh -s 1
+
+    # NO NEED to run following command, just mark them here
+    # close a CUDA 12.8 docker container with id 1,
+    bash run_cuda_12_8.sh -c 1
+
+    # enter a CUDA 12.8 docker container with id 1,
+    bash run_cuda_12_8.sh -e 1
+    ```
+
+- For ROCm platform
+    ```bash
+    # start a ROCm 7.2 docker container with id 1,
+    # the container name would be gw_${user_name}_rocm_7_2_1
+    bash run_rocm_7_2.sh -s 1
+
+    # NO NEED to run following command, just mark them here
+    # close a ROCm 7.2 docker container with id 1,
+    bash run_rocm_7_2.sh -c 1
+
+    # enter a ROCm 7.2 docker container with id 1,
+    bash run_rocm_7_2.sh -e 1
+    ```
+
+    By running the script for start/enter a container, the repository would be mapped to `/root` inside the container.
+
+
+3. Install G-Watch inside the container
+    ```bash
+    # install prerequiries
+    apt-get update
+    apt-get install -y curl git
+
+    # install gwatch
+    curl -sSL https://raw.githubusercontent.com/mars-compute-ai/G-Watch/main/install.sh | bash
+    ```
+
 
 ## Examples
 
