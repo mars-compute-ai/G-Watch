@@ -1,14 +1,13 @@
 # Agentic FlashAttention-3 Optimization
 
 This guide walks you through setting up FlashAttention-3 and using the G-Watch agent to automatically optimize its CUDA kernels.
-All subsequent commands assume you are running within the docker container environment we setup in [README](../../../README.md).
-
 
 ## 1. Install Prerequisites
 
 Install the required Python packages:
 
 ```bash
+export GWATCH_REPO_PATH=$PWD
 pip3 install packaging torch torchvision ninja --break-system-packages
 ```
 
@@ -25,7 +24,7 @@ git checkout d146efff6f3226f465f1b4f089eaefe52c475e9c
 Next, apply the patch that integrates PTX instrumentation into the FA-3 build:
 
 ```bash
-git apply /root/examples/cuda/fa3/fa3_build_with_ptx.patch
+git apply $GWATCH_REPO_PATH/example/cuda/fa3/fa3_build_with_ptx.patch
 ```
 
 Now build FA-3. The environment variables below narrow the build scope to keep compilation fast — only the forward-pass kernel with hdim128, FP16, on Hopper is compiled:
@@ -47,7 +46,7 @@ python3 setup.py install
 Once the build completes, run the FLOPS benchmark to confirm FA-3 is installed and produces valid results:
 
 ```bash
-cd /root/examples/cuda/fa3
+cd $GWATCH_REPO_PATH/example/cuda/fa3
 python3 do_flops_fa3.py
 ```
 
@@ -73,6 +72,7 @@ This skill is automatically installed to your code agent when you install G-Watc
 ─────────────────────────────────
 ❯ /gwatch-cuda-optimize-fa3
 ❯ FA_PATH is @[THE PATH TO flash-attention]
+❯ GWATCH_REPO_PATH is @[THE PATH TO G-Watch]
 ─────────────────────────────────
 ```
 

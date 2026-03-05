@@ -9,6 +9,7 @@ you must adopt a systematic, data-driven optimization strategy, seamlessly alter
 
 
 ## Input
+- `GWATCH_PATH`: The path to the G-Watch codebase, provided by the user when invoking this skill.
 - `FA_PATH`: The path to the flash-attention codebase, provided by the user when invoking this skill.
 
 
@@ -21,16 +22,16 @@ Use this when you need to:
 - iterate profiling until bottlenecks are reduced.
 
 Target scripts:
-- `examples/cuda/fa3/do_flops_fa3.py`
-- `examples/cuda/fa3/do_range_profile_fa3.py`
-- `examples/cuda/fa3/do_pc_sampling_fa3.py`
-- `examples/cuda/fa3/do_trace_fa3.py`
+- `$GWATCH_PATH/examples/cuda/fa3/do_flops_fa3.py`
+- `$GWATCH_PATH/examples/cuda/fa3/do_range_profile_fa3.py`
+- `$GWATCH_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py`
+- `$GWATCH_PATH/examples/cuda/fa3/do_trace_fa3.py`
 
 Primary optimization source files:
-- `FA_PATH/hopper/flash_fwd_kernel_sm90.h`
-- `FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
-- `FA_PATH/hopper/epilogue_fwd.hpp`
-- `FA_PATH/hopper/tile_scheduler.hpp`
+- `$FA_PATH/hopper/flash_fwd_kernel_sm90.h`
+- `$FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
+- `$FA_PATH/hopper/epilogue_fwd.hpp`
+- `$FA_PATH/hopper/tile_scheduler.hpp`
 
 
 ## Tool 1: Baseline FLOPs
@@ -38,14 +39,15 @@ If you need end-to-end baseline performance numbers (latency and throughput KPI)
 Expected to get: `avg_ms`, `total_flops`, `tflops`.
 
 ```bash
-python3 examples/cuda/fa3/do_flops_fa3.py \
+export $GWATCH_PATH=[User provided G-Watch Path]
+python3 $GWATCH_PATH/examples/cuda/fa3/do_flops_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
     --nheads 16 \
     --headdim 128 \
     --dtype bf16 \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --rep 50
 ```
 
@@ -97,7 +99,8 @@ Pick a focused set (4-10 metrics) that can separate likely bottlenecks:
 After selecting proper metrics to be profile, you can run the profile by:
 
 ```bash
-gwatch profile python3 examples/cuda/fa3/do_range_profile_fa3.py \
+export $GWATCH_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_range_profile_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -105,7 +108,7 @@ gwatch profile python3 examples/cuda/fa3/do_range_profile_fa3.py \
     --headdim 128 \
     --dtype bf16 \
     --metrics "sm__cycles_active.avg.pct_of_peak_sustained_elapsed" \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --kernel-regex ".*flash.*" \
     --dump-path /tmp/fa3_range_profile.gwatch
 ```
@@ -136,7 +139,8 @@ If you need instruction-level hotspot locations and dominant stall reasons (wher
 Expected to get: top PCs by stall weight, stall-reason breakdown per PC, and source/SASS-correlated hotspots.
 
 ```bash
-gwatch profile python3 examples/cuda/fa3/do_pc_sampling_fa3.py \
+export $GWATCH_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -144,12 +148,12 @@ gwatch profile python3 examples/cuda/fa3/do_pc_sampling_fa3.py \
     --headdim 128 \
     --dtype bf16 \
     --kernel-regex ".*flash.*" \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --rep 50 \
     --dump-path /tmp/fa3_pc_sampling.gwatch
 ```
 
-Set `--model-config examples/cuda/fa3/config/qwen3.json` to reuse that config's head ratio.
+Set `--model-config $GWATCH_PATH/examples/cuda/fa3/config/qwen3.json` to reuse that config's head ratio.
 
 ### View PC Sampling Results
 Inspect results of the PC sampling using `gwatch show`:
@@ -209,7 +213,8 @@ Finally,
 you can run the tracing by:
 
 ```bash
-gwatch profile python3 examples/cuda/fa3/do_trace_fa3.py \
+export $GWATCH_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_trace_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -217,7 +222,7 @@ gwatch profile python3 examples/cuda/fa3/do_trace_fa3.py \
     --headdim 128 \
     --dtype bf16 \
     --kernel-regex ".*flash.*" \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --warmup 25 \
     --rep 100 \
     --dump-path /tmp/fa3_trace.gwatch
@@ -314,15 +319,15 @@ Note that:
 
 ## Modify FA3 Source and Rebuild
 Key files related to FlashAttention-3 include but not limited to:
-- `FA_PATH/hopper/flash_fwd_kernel_sm90.h`
-- `FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
-- `FA_PATH/hopper/epilogue_fwd.hpp`
-- `FA_PATH/hopper/tile_scheduler.hpp`
+- `$FA_PATH/hopper/flash_fwd_kernel_sm90.h`
+- `$FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
+- `$FA_PATH/hopper/epilogue_fwd.hpp`
+- `$FA_PATH/hopper/tile_scheduler.hpp`
 
 Rebuild command:
 
 ```bash
-cd FA_PATH/hopper/
+cd $FA_PATH/hopper/
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"

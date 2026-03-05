@@ -8,6 +8,7 @@ All subsequent commands assume you are running within the docker container envir
 Install the required Python packages:
 
 ```bash
+export GWATCH_REPO_PATH=$PWD
 pip3 install packaging torch torchvision
 ```
 
@@ -24,7 +25,7 @@ git checkout d146efff6f3226f465f1b4f089eaefe52c475e9c
 Next, apply the patch that enables a fast, scoped build for FA-2 with trace instrumentation:
 
 ```bash
-git apply /root/examples/cuda/fa2/fa2_fast_build.patch
+git apply /$GWATCH_REPO_PATH/examples/cuda/fa2/fa2_fast_build.patch
 ```
 
 Now build FA-2. The environment variables below narrow the build scope to keep compilation fast — only the forward-pass kernel with hdim256, BF16, on Ampere (sm80) is compiled:
@@ -44,7 +45,7 @@ python3 setup.py install
 Once the build completes, run the FLOPS benchmark to confirm FA-2 is installed and produces valid results:
 
 ```bash
-cd /root/examples/cuda/fa2
+cd /$GWATCH_REPO_PATH/examples/cuda/fa2
 python3 do_flops_fa2.py
 ```
 
@@ -70,5 +71,6 @@ This skill is automatically installed to your code agent when you install G-Watc
 ─────────────────────────────────
 ❯ /gwatch-cuda-optimize-fa2
 ❯ FA_PATH is @[THE PATH TO flash-attention]
+❯ GWATCH_REPO_PATH is @[THE PATH TO G-Watch]
 ─────────────────────────────────
 ```

@@ -9,6 +9,7 @@ you must adopt a systematic, data-driven optimization strategy, seamlessly alter
 
 
 ## Input
+- `GWATCH_PATH`: The path to the G-Watch codebase, provided by the user when invoking this skill.
 - `FA_PATH`: The path to the flash-attention codebase, provided by the user when invoking this skill.
 
 
@@ -21,10 +22,10 @@ Use this when you need to:
 - iterate profiling until bottlenecks are reduced.
 
 Target scripts:
-- `examples/cuda/fa2/do_flops_fa2.py`
-- `examples/cuda/fa2/do_range_profile_fa2.py`
-- `examples/cuda/fa2/do_pc_sampling_fa2.py`
-- `examples/cuda/fa2/do_trace_fa2.py`
+- `$GWATCH_PATH/examples/cuda/fa2/do_flops_fa2.py`
+- `$GWATCH_PATH/examples/cuda/fa2/do_range_profile_fa2.py`
+- `$GWATCH_PATH/examples/cuda/fa2/do_pc_sampling_fa2.py`
+- `$GWATCH_PATH/examples/cuda/fa2/do_trace_fa2.py`
 
 Primary optimization source files:
 - `FA_PATH/csrc/flash_attn/src/flash_fwd_kernel.h`
@@ -38,14 +39,15 @@ If you need end-to-end baseline performance numbers (latency and throughput KPI)
 Expected to get: `avg_ms`, `total_flops`, `tflops`.
 
 ```bash
-python3 examples/cuda/fa2/do_flops_fa2.py \
+export GWATCH_PATH=[User provided G-Watch Path]
+python3 $GWATCH_PATH/examples/cuda/fa2/do_flops_fa2.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
     --nheads 16 \
     --headdim 256 \
     --dtype bf16 \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --rep 50
 ```
 
@@ -56,7 +58,7 @@ Record at minimum:
 
 Use this as the baseline KPI before any kernel changes.
 
-For GQA sweeps, append `--model-config examples/cuda/model_config/llama4.json` (or point to `qwen3.5.json` / `qwen3.json`), or override via `--q-heads`/`--kv-heads`.
+For GQA sweeps, append `--model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json` (or point to `qwen3.5.json` / `qwen3.json`), or override via `--q-heads`/`--kv-heads`.
 
 
 ## Tool 2: Select Metrics for Range Profiling
@@ -97,7 +99,8 @@ Pick a focused set (4-10 metrics) that can separate likely bottlenecks:
 After selecting proper metrics to be profile, you can run the profile by:
 
 ```bash
-gwatch profile python3 examples/cuda/fa2/do_range_profile_fa2.py \
+export GWATCH_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_PATH/examples/cuda/fa2/do_range_profile_fa2.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -105,12 +108,12 @@ gwatch profile python3 examples/cuda/fa2/do_range_profile_fa2.py \
     --headdim 256 \
     --dtype bf16 \
     --metrics "sm__cycles_active.avg.pct_of_peak_sustained_elapsed" \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --kernel-regex ".*flash.*" \
     --dump-path /tmp/fa2_range_profile.gwatch
 ```
 
-Use `--model-config examples/cuda/fa2/config/qwen3.5.json` to profile that GQA shape, or override `--q-heads`/`--kv-heads` manually.
+Use `--model-config $GWATCH_PATH/examples/cuda/model_config/qwen3.5.json` to profile that GQA shape, or override `--q-heads`/`--kv-heads` manually.
 
 Note that for `--metrics` argument, better to have one metric at a time.
 
@@ -136,7 +139,8 @@ If you need instruction-level hotspot locations and dominant stall reasons (wher
 Expected to get: top PCs by stall weight, stall-reason breakdown per PC, and source/SASS-correlated hotspots.
 
 ```bash
-gwatch profile python3 examples/cuda/fa2/do_pc_sampling_fa2.py \
+export GWATCH_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_PATH/examples/cuda/fa2/do_pc_sampling_fa2.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -144,12 +148,12 @@ gwatch profile python3 examples/cuda/fa2/do_pc_sampling_fa2.py \
     --headdim 256 \
     --dtype bf16 \
     --kernel-regex ".*flash.*" \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --rep 50 \
     --dump-path /tmp/fa2_pc_sampling.gwatch
 ```
 
-Set `--model-config examples/cuda/fa2/config/qwen3.json` to reuse that config's head ratio.
+Set `--model-config $GWATCH_PATH/examples/cuda/model_config/qwen3.json` to reuse that config's head ratio.
 
 ### View PC Sampling Results
 Inspect results of the PC sampling using `gwatch show`:
@@ -178,7 +182,7 @@ you can trace a specific region in the FA2 source code that doesn't have markers
 
 1. **Include Header**: Ensure `#include "gwatch/cuda/trace.hpp"` is present in the target `.h` file.
 2. **Add Markers**: Wrap code with `GWATCH_CUDA_KERNEL_SCOPE_START(TAG_ID);` and `GWATCH_CUDA_KERNEL_SCOPE_END(TAG_ID);`. Use a unique integer for `TAG_ID`.
-3. **Map Names**: Add your `TAG_ID` and a descriptive name to `name_id_map` in `examples/cuda/fa2/do_trace_fa2.py`.
+3. **Map Names**: Add your `TAG_ID` and a descriptive name to `name_id_map` in `$GWATCH_PATH/examples/cuda/fa2/do_trace_fa2.py`.
 4. **Rebuild**: Follow the rebuild steps below to apply changes.
 
 Example from `flash_fwd_kernel.h`:
@@ -217,7 +221,8 @@ Finally,
 you can run the tracing by:
 
 ```bash
-gwatch profile python3 examples/cuda/fa2/do_trace_fa2.py \
+export GWATCH_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_PATH/examples/cuda/fa2/do_trace_fa2.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -225,7 +230,7 @@ gwatch profile python3 examples/cuda/fa2/do_trace_fa2.py \
     --headdim 256 \
     --dtype bf16 \
     --kernel-regex ".*flash.*" \
-    --model-config examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
     --warmup 25 \
     --rep 100 \
     --dump-path /tmp/fa2_trace.gwatch
