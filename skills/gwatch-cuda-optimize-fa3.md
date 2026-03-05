@@ -21,10 +21,10 @@ Use this when you need to:
 - iterate profiling until bottlenecks are reduced.
 
 Target scripts:
-- `examples/cuda/profiler/fa3/do_flops_fa3.py`
-- `examples/cuda/profiler/fa3/do_range_profile_fa3.py`
-- `examples/cuda/profiler/fa3/do_pc_sampling_fa3.py`
-- `examples/cuda/profiler/fa3/do_trace_fa3.py`
+- `examples/cuda/fa3/do_flops_fa3.py`
+- `examples/cuda/fa3/do_range_profile_fa3.py`
+- `examples/cuda/fa3/do_pc_sampling_fa3.py`
+- `examples/cuda/fa3/do_trace_fa3.py`
 
 Primary optimization source files:
 - `FA_PATH/hopper/flash_fwd_kernel_sm90.h`
@@ -38,7 +38,7 @@ If you need end-to-end baseline performance numbers (latency and throughput KPI)
 Expected to get: `avg_ms`, `total_flops`, `tflops`.
 
 ```bash
-python3 examples/cuda/profiler/fa3/do_flops_fa3.py \
+python3 examples/cuda/fa3/do_flops_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -97,7 +97,7 @@ Pick a focused set (4-10 metrics) that can separate likely bottlenecks:
 After selecting proper metrics to be profile, you can run the profile by:
 
 ```bash
-gwatch profile python3 examples/cuda/profiler/fa3/do_range_profile_fa3.py \
+gwatch profile python3 examples/cuda/fa3/do_range_profile_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -110,7 +110,7 @@ gwatch profile python3 examples/cuda/profiler/fa3/do_range_profile_fa3.py \
     --dump-path /tmp/fa3_range_profile.gwatch
 ```
 
-Use `--model-config examples/cuda/profiler/fa3/config/qwen3.5.json` to profile that GQA shape, or override `--q-heads`/`--kv-heads` manually.
+Use `--model-config examples/cuda/fa3/config/qwen3.5.json` to profile that GQA shape, or override `--q-heads`/`--kv-heads` manually.
 
 Note that for `--metrics` argument, better to have one metric at a time.
 
@@ -136,7 +136,7 @@ If you need instruction-level hotspot locations and dominant stall reasons (wher
 Expected to get: top PCs by stall weight, stall-reason breakdown per PC, and source/SASS-correlated hotspots.
 
 ```bash
-gwatch profile python3 examples/cuda/profiler/fa3/do_pc_sampling_fa3.py \
+gwatch profile python3 examples/cuda/fa3/do_pc_sampling_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -149,7 +149,7 @@ gwatch profile python3 examples/cuda/profiler/fa3/do_pc_sampling_fa3.py \
     --dump-path /tmp/fa3_pc_sampling.gwatch
 ```
 
-Set `--model-config examples/cuda/profiler/fa3/config/qwen3.json` to reuse that config's head ratio.
+Set `--model-config examples/cuda/fa3/config/qwen3.json` to reuse that config's head ratio.
 
 ### View PC Sampling Results
 Inspect results of the PC sampling using `gwatch show`:
@@ -178,7 +178,7 @@ you can trace a specific region in the FA3 source code that doesn't have markers
 
 1. **Include Header**: Ensure `#include "gwatch/cuda/trace.hpp"` is present in the target `.h` or `.hpp` file.
 2. **Add Markers**: Wrap code with `GWATCH_CUDA_KERNEL_SCOPE_START(TAG_ID);` and `GWATCH_CUDA_KERNEL_SCOPE_END(TAG_ID);`. Use a unique integer for `TAG_ID`.
-3. **Map Names**: Add your `TAG_ID` and a descriptive name to `name_id_map` in `examples/cuda/profiler/fa3/do_trace_fa3.py`.
+3. **Map Names**: Add your `TAG_ID` and a descriptive name to `name_id_map` in `examples/cuda/fa3/do_trace_fa3.py`.
 4. **Rebuild**: Follow the rebuild steps below to apply changes.
 
 Example from `mainloop_fwd_sm90_tma_gmma_ws.hpp`:
@@ -209,7 +209,7 @@ Finally,
 you can run the tracing by:
 
 ```bash
-gwatch profile python3 examples/cuda/profiler/fa3/do_trace_fa3.py \
+gwatch profile python3 examples/cuda/fa3/do_trace_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
