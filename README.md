@@ -56,8 +56,8 @@ It features rich **Profiling** and **Program Analysis** capabilities on both NVI
 3. Install G-Watch inside the container
     ```bash
     # install prerequiries
-    apt-get update
-    apt-get install -y curl git
+    apt-get update -o APT::Sandbox::User=root
+    apt-get install -y curl git -o APT::Sandbox::User=root
 
     # install gwatch
     curl -sSL https://raw.githubusercontent.com/mars-compute-ai/G-Watch/main/install.sh | bash

@@ -7,11 +7,6 @@ import torch
 
 import gwatch.cuda.profile as gw_profile
 
-
-# Add flash-attention (v3) to sys.path
-sys.path.append("/root/workload/flash-attention")
-sys.path.append("/root/workload/flash-attention/hopper")
-
 try:
     from flash_attn_interface import flash_attn_func as flash_attn_func_v3
 except ImportError:
