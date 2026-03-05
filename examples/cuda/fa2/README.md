@@ -3,7 +3,16 @@
 This guide walks you through setting up FlashAttention-2 and using the G-Watch agent to automatically optimize its CUDA kernels on Ampere.
 All subsequent commands assume you are running within the docker container environment we setup in [README](../../../README.md).
 
-## 1. Install Prerequisites
+
+## 1. Clone Repository
+
+```bash
+git clone https://github.com/mars-compute-ai/G-Watch.git
+cd G-Watch
+export GWATCH_REPO_PATH=$PWD
+```
+
+## 2. Install Prerequisites
 
 Install the required Python packages:
 
@@ -12,7 +21,7 @@ export GWATCH_REPO_PATH=$PWD
 pip3 install packaging torch torchvision
 ```
 
-## 2. Clone and Build FlashAttention-2
+## 3. Clone and Build FlashAttention-2
 
 Clone the FlashAttention repository and check out the known-good commit that this example is tested against:
 
@@ -40,7 +49,7 @@ export FLASH_ATTENTION_DISABLE_FP8="TRUE"
 python3 setup.py install
 ```
 
-## 3. Verify the Installation
+## 4. Verify the Installation
 
 Once the build completes, run the FLOPS benchmark to confirm FA-2 is installed and produces valid results:
 
@@ -49,7 +58,7 @@ cd /$GWATCH_REPO_PATH/examples/cuda/fa2
 python3 do_flops_fa2.py
 ```
 
-## 4. Start the Agent Loop
+## 5. Start the Agent Loop
 
 Everything is set up.
 Launch the optimization agent by invoking the `gwatch-cuda-optimize-fa2` skill inside your code agent.
