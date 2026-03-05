@@ -65,23 +65,9 @@ Launch the optimization agent by invoking the `gwatch-cuda-optimize-fa3` skill i
 This skill is automatically installed to your code agent when you install G-Watch.
 
 ```bash
-─── Claude Code v2.1.63 ─────────────────────────────╮
-│                                                    │ 
-│                Welcome back Mars-Compute!          │
-│                                                    │
-│                                                    │
-│                       ▐▛███▜▌                      │
-│                      ▝▜█████▛▘                     │
-│                        ▘▘ ▝▝                       │
-│   Opus 4.6 · Claude Max · demo@mars-compute.com's  │
-│   Organization                                     │
-│                       /root                        │
-╰────────────────────────────────────────────────────╯
-─────────────────────────────────
-❯ /gwatch-cuda-optimize-fa3
-❯ FA_PATH is @[THE PATH TO flash-attention]
-❯ GWATCH_REPO_PATH is @[THE PATH TO G-Watch]
-─────────────────────────────────
+/gwatch-cuda-optimize-fa3
+FA_PATH is @[THE PATH TO flash-attention]
+GWATCH_REPO_PATH is @[THE PATH TO G-Watch]
 ```
 
 ## 6. Results
