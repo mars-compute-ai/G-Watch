@@ -52,10 +52,43 @@ REPO="mars-compute-ai/G-Watch"
 API_URL="https://api.github.com/repos/$REPO/releases/latest"
 
 echo "Fetching latest release metadata from GitHub..."
-WHL_URL=$(curl -s $API_URL | grep "browser_download_url" | grep "gwatch_${GPU_TYPE}_" | grep "manylinux2014_x86_64.whl" | cut -d '"' -f 4 | head -n 1)
+
+# Detect system libc version (e.g. "2.34" -> major=2, minor=34)
+LIBC_VERSION=$(ldd --version 2>&1 | head -n1 | grep -oP '\d+\.\d+$')
+if [ -z "$LIBC_VERSION" ]; then
+    echo "Error: Could not detect system libc version."
+    exit 1
+fi
+LIBC_MAJOR=$(echo "$LIBC_VERSION" | cut -d. -f1)
+LIBC_MINOR=$(echo "$LIBC_VERSION" | cut -d. -f2)
+echo "Detected system libc version: $LIBC_VERSION"
+
+ARCH=$(uname -m)
+
+# Get all matching wheel URLs for this GPU type and architecture,
+# then select the one with the highest manylinux version <= system libc.
+RELEASE_JSON=$(curl -s "$API_URL")
+WHL_URL=$(echo "$RELEASE_JSON" | grep "browser_download_url" | grep "gwatch_${GPU_TYPE}_" | grep "_${ARCH}.whl" | cut -d '"' -f 4 | while read -r url; do
+    # Extract manylinux version: manylinux_2_34 or manylinux2014
+    basename_url=$(basename "$url")
+    if echo "$basename_url" | grep -qP 'manylinux_(\d+)_(\d+)'; then
+        ml_major=$(echo "$basename_url" | grep -oP 'manylinux_\K\d+(?=_\d+)')
+        ml_minor=$(echo "$basename_url" | grep -oP 'manylinux_\d+_\K\d+')
+    elif echo "$basename_url" | grep -qP 'manylinux(\d+)'; then
+        # Legacy format: manylinux2014 -> glibc 2.17
+        ml_major=2
+        ml_minor=17
+    else
+        continue
+    fi
+    # Check: wheel's libc requirement <= system libc (forward compatible)
+    if [ "$ml_major" -lt "$LIBC_MAJOR" ] || { [ "$ml_major" -eq "$LIBC_MAJOR" ] && [ "$ml_minor" -le "$LIBC_MINOR" ]; }; then
+        printf "%d %d %s\n" "$ml_major" "$ml_minor" "$url"
+    fi
+done | sort -k1,1n -k2,2n | tail -n1 | awk '{print $3}')
 
 if [ -z "$WHL_URL" ]; then
-    echo "Error: Could not find a matching $GPU_TYPE wheel in the latest release."
+    echo "Error: Could not find a matching $GPU_TYPE wheel for libc $LIBC_VERSION in the latest release."
     exit 1
 fi
 
