@@ -9,8 +9,9 @@ you must adopt a systematic, data-driven optimization strategy, seamlessly alter
 
 
 ## Input
-- `GWATCH_PATH`: The path to the G-Watch codebase, provided by the user when invoking this skill.
-- `FA_PATH`: The path to the flash-attention codebase, provided by the user when invoking this skill.
+- `GWATCH_REPO_PATH`: The path to the G-Watch codebase, provided by the user when invoking this skill, default is `$PWD` if user not provided
+- `FA_REPO_PATH`: The path to the flash-attention codebase, provided by the user when invoking this skill, default is `$PWD/flash-attention` if user not provided
+- `TRACE_DUMP_PATH`: The path to dump the agentic trace result, default is `$PWD/agent_trace.json` if user not provided
 
 
 ## Scope
@@ -22,16 +23,16 @@ Use this when you need to:
 - iterate profiling until bottlenecks are reduced.
 
 Target scripts:
-- `$GWATCH_PATH/examples/cuda/fa3/do_flops_fa3.py`
-- `$GWATCH_PATH/examples/cuda/fa3/do_range_profile_fa3.py`
-- `$GWATCH_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py`
-- `$GWATCH_PATH/examples/cuda/fa3/do_trace_fa3.py`
+- `$GWATCH_REPO_PATH/examples/cuda/fa3/do_flops_fa3.py`
+- `$GWATCH_REPO_PATH/examples/cuda/fa3/do_range_profile_fa3.py`
+- `$GWATCH_REPO_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py`
+- `$GWATCH_REPO_PATH/examples/cuda/fa3/do_trace_fa3.py`
 
 Primary optimization source files:
-- `$FA_PATH/hopper/flash_fwd_kernel_sm90.h`
-- `$FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
-- `$FA_PATH/hopper/epilogue_fwd.hpp`
-- `$FA_PATH/hopper/tile_scheduler.hpp`
+- `$FA_REPO_PATH/hopper/flash_fwd_kernel_sm90.h`
+- `$FA_REPO_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
+- `$FA_REPO_PATH/hopper/epilogue_fwd.hpp`
+- `$FA_REPO_PATH/hopper/tile_scheduler.hpp`
 
 
 ## Tool 1: Baseline FLOPs
@@ -39,15 +40,15 @@ If you need end-to-end baseline performance numbers (latency and throughput KPI)
 Expected to get: `avg_ms`, `total_flops`, `tflops`.
 
 ```bash
-export $GWATCH_PATH=[User provided G-Watch Path]
-python3 $GWATCH_PATH/examples/cuda/fa3/do_flops_fa3.py \
+export $GWATCH_REPO_PATH=[User provided G-Watch Path]
+python3 $GWATCH_REPO_PATH/examples/cuda/fa3/do_flops_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
     --nheads 16 \
     --headdim 128 \
     --dtype bf16 \
-    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_REPO_PATH/examples/cuda/model_config/llama4.json \
     --rep 50
 ```
 
@@ -99,8 +100,8 @@ Pick a focused set (4-10 metrics) that can separate likely bottlenecks:
 After selecting proper metrics to be profile, you can run the profile by:
 
 ```bash
-export $GWATCH_PATH=[User provided G-Watch Path]
-gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_range_profile_fa3.py \
+export $GWATCH_REPO_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_REPO_PATH/examples/cuda/fa3/do_range_profile_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -108,7 +109,7 @@ gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_range_profile_fa3.py \
     --headdim 128 \
     --dtype bf16 \
     --metrics "sm__cycles_active.avg.pct_of_peak_sustained_elapsed" \
-    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_REPO_PATH/examples/cuda/model_config/llama4.json \
     --kernel-regex ".*flash.*" \
     --dump-path /tmp/fa3_range_profile.gwatch
 ```
@@ -139,8 +140,8 @@ If you need instruction-level hotspot locations and dominant stall reasons (wher
 Expected to get: top PCs by stall weight, stall-reason breakdown per PC, and source/SASS-correlated hotspots.
 
 ```bash
-export $GWATCH_PATH=[User provided G-Watch Path]
-gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py \
+export $GWATCH_REPO_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_REPO_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -148,12 +149,12 @@ gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_pc_sampling_fa3.py \
     --headdim 128 \
     --dtype bf16 \
     --kernel-regex ".*flash.*" \
-    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_REPO_PATH/examples/cuda/model_config/llama4.json \
     --rep 50 \
     --dump-path /tmp/fa3_pc_sampling.gwatch
 ```
 
-Set `--model-config $GWATCH_PATH/examples/cuda/fa3/config/qwen3.json` to reuse that config's head ratio.
+Set `--model-config $GWATCH_REPO_PATH/examples/cuda/fa3/config/qwen3.json` to reuse that config's head ratio.
 
 ### View PC Sampling Results
 Inspect results of the PC sampling using `gwatch show`:
@@ -197,7 +198,7 @@ Then,
 you can recompile the instrumented FA3 kernel by:
 
 ```bash
-cd FA_PATH/hopper/
+cd FA_REPO_PATH/hopper/
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"
@@ -213,8 +214,8 @@ Finally,
 you can run the tracing by:
 
 ```bash
-export $GWATCH_PATH=[User provided G-Watch Path]
-gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_trace_fa3.py \
+export $GWATCH_REPO_PATH=[User provided G-Watch Path]
+gwatch profile python3 $GWATCH_REPO_PATH/examples/cuda/fa3/do_trace_fa3.py \
     --device-id 0 \
     --batch 8 \
     --seqlen 8192 \
@@ -222,7 +223,7 @@ gwatch profile python3 $GWATCH_PATH/examples/cuda/fa3/do_trace_fa3.py \
     --headdim 128 \
     --dtype bf16 \
     --kernel-regex ".*flash.*" \
-    --model-config $GWATCH_PATH/examples/cuda/model_config/llama4.json \
+    --model-config $GWATCH_REPO_PATH/examples/cuda/model_config/llama4.json \
     --warmup 25 \
     --rep 100 \
     --dump-path /tmp/fa3_trace.gwatch
@@ -319,15 +320,15 @@ Note that:
 
 ## Modify FA3 Source and Rebuild
 Key files related to FlashAttention-3 include but not limited to:
-- `$FA_PATH/hopper/flash_fwd_kernel_sm90.h`
-- `$FA_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
-- `$FA_PATH/hopper/epilogue_fwd.hpp`
-- `$FA_PATH/hopper/tile_scheduler.hpp`
+- `$FA_REPO_PATH/hopper/flash_fwd_kernel_sm90.h`
+- `$FA_REPO_PATH/hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp`
+- `$FA_REPO_PATH/hopper/epilogue_fwd.hpp`
+- `$FA_REPO_PATH/hopper/tile_scheduler.hpp`
 
 Rebuild command:
 
 ```bash
-cd $FA_PATH/hopper/
+cd $FA_REPO_PATH/hopper/
 export FLASH_ATTENTION_DISABLE_HDIM64="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM96="TRUE"
 export FLASH_ATTENTION_DISABLE_HDIM192="TRUE"
@@ -363,7 +364,7 @@ Upon completing your optimization journey, you must provide a comprehensive fina
    - A detailed breakdown of what specific code changes were made.
    - The estimated or measured percentage of performance gain attributed to each individual modification.
 3. **Optimization Process Report:**
-   - A complete, step-by-step chronological log of your optimization journey.
+   - A complete, step-by-step chronological log of your optimization journey, dump to `$TRACE_DUMP_PATH`
    - Detailed documentation of *every* attempt (including the tool used, the finding, the hypothesis, and the result).
     ### Log Format
     You must output your log in the exact JSON structure below, preserved inside a ````json ```` fenced code block. 
@@ -373,32 +374,32 @@ Upon completing your optimization journey, you must provide a comprehensive fina
 
     ```json
     {
-    "baseline_performance": {
-        "TFLOPS": "...",
-        "avg_ms": "..."
-    },
-    "optimization_rounds": [
-        {
-        "round_num": 1,
-        "tools_used": [
-            {
-            "tool_name": "Tool 2: Select Metrics for Range Profiling",
-            "metrics_chosen": [
-                "smsp__sass_l1tex_t_requests_pipe_lsu_mem_global_op_ldgsts_cache_bypass"
-            ],
-            "reasoning": "1. I chose Tool 2 because it is necessary to identify memory bottlenecks. 2. I chose this specific metric because ...",
-            "result": "The profiling revealed a high number of L1 cache bypasses, indicating poor memory coalescing."
-            }
-        ],
-        "analysis": "Because the L1 cache bypasses are high, the threads in the warp are likely accessing non-contiguous memory. I am changing the thread block indexing to ensure coalesced memory access.",
-        "code_change": "diff --git a/kernel.cu b/kernel.cu\nindex 8ab686e..980a0d5 100644\n--- a/kernel.cu\n+++ b/kernel.cu\n@@ -12,2 +12,2 @@\n-    int idx = blockIdx.x * blockDim.x + threadIdx.x;\n+    int idx = threadIdx.x * gridDim.x + blockIdx.x;\n",
-        "result": {
+        "baseline_performance": {
             "TFLOPS": "...",
-            "avg_ms": "...",
-            "status": "Failed - Performance degraded due to stride issues. Will revert in next round."
-        }
-        }
-    ]
+            "avg_ms": "..."
+        },
+        "optimization_rounds": [
+            {
+                "round_num": 1,
+                "tools_used": [
+                    {
+                    "tool_name": "Tool 2: Select Metrics for Range Profiling",
+                    "metrics_chosen": [
+                        "smsp__sass_l1tex_t_requests_pipe_lsu_mem_global_op_ldgsts_cache_bypass"
+                    ],
+                    "reasoning": "1. I chose Tool 2 because it is necessary to identify memory bottlenecks. 2. I chose this specific metric because ...",
+                    "result": "The profiling revealed a high number of L1 cache bypasses, indicating poor memory coalescing."
+                    }
+                ],
+                "analysis": "Because the L1 cache bypasses are high, the threads in the warp are likely accessing non-contiguous memory. I am changing the thread block indexing to ensure coalesced memory access.",
+                "code_change": "diff --git a/kernel.cu b/kernel.cu\nindex 8ab686e..980a0d5 100644\n--- a/kernel.cu\n+++ b/kernel.cu\n@@ -12,2 +12,2 @@\n-    int idx = blockIdx.x * blockDim.x + threadIdx.x;\n+    int idx = threadIdx.x * gridDim.x + blockIdx.x;\n",
+                "result": {
+                    "TFLOPS": "...",
+                    "avg_ms": "...",
+                    "status": "Failed - Performance degraded due to stride issues. Will revert in next round."
+                }
+            }
+        ]
     }
     ```
 
