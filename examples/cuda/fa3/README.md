@@ -24,7 +24,7 @@ git checkout d146efff6f3226f465f1b4f089eaefe52c475e9c
 Next, apply the patch that integrates PTX instrumentation into the FA-3 build:
 
 ```bash
-git apply $GWATCH_REPO_PATH/example/cuda/fa3/fa3_build_with_ptx.patch
+git apply $GWATCH_REPO_PATH/examples/cuda/fa3/fa3_build_with_ptx.patch
 ```
 
 Now build FA-3. The environment variables below narrow the build scope to keep compilation fast — only the forward-pass kernel with hdim128, FP16, on Hopper is compiled:
