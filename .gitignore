@@ -3,3 +3,6 @@ workload
 .bash_history
 .python_history
 flash-attention
+.cache
+.claude*
+.local
