@@ -46,7 +46,7 @@ python3 setup.py install
 Once the build completes, run the FLOPS benchmark to confirm FA-3 is installed and produces valid results:
 
 ```bash
-cd $GWATCH_REPO_PATH/example/cuda/fa3
+cd $GWATCH_REPO_PATH/examples/cuda/fa3
 python3 do_flops_fa3.py
 ```
 
