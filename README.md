@@ -10,7 +10,14 @@
 **G-Watch** is an agentic toolbox for optimizing GPU kernels.
 It features rich **Profiling** and **Program Analysis** capabilities on both NVIDIA and AMD GPUs.
 
-## Installation
+## ⚙️ Installation
+
+```bash
+curl -sSL https://raw.githubusercontent.com/mars-compute-ai/G-Watch/main/install.sh | bash
+```
+
+
+## 🐬 Installation with Docker
 
 1. Clone repository
 
@@ -62,8 +69,6 @@ It features rich **Profiling** and **Program Analysis** capabilities on both NVI
     # install gwatch
     curl -sSL https://raw.githubusercontent.com/mars-compute-ai/G-Watch/main/install.sh | bash
     ```
-
-    Furthermore, you could install your prefer code agent inside your container as well.
 
 
 ## Examples
