@@ -65,12 +65,34 @@ echo "Detected system libc version: $LIBC_VERSION"
 
 ARCH=$(uname -m)
 
+# Detect Python version for wheel compatibility (e.g. 3.9 -> 39)
+PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
+PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
+PY_VER="${PY_MAJOR}${PY_MINOR}"
+echo "Detected Python version: ${PY_MAJOR}.${PY_MINOR}"
+
 # Get all matching wheel URLs for this GPU type and architecture,
-# then select the one with the highest manylinux version <= system libc.
+# filter by Python and libc compatibility, then pick the best match.
 RELEASE_JSON=$(curl -s "$API_URL")
 WHL_URL=$(echo "$RELEASE_JSON" | grep "browser_download_url" | grep "gwatch_${GPU_TYPE}_" | grep "_${ARCH}.whl" | cut -d '"' -f 4 | while read -r url; do
-    # Extract manylinux version: manylinux_2_34 or manylinux2014
     basename_url=$(basename "$url")
+
+    # Check Python version compatibility from the wheel tag:
+    #   py3X-none  -> compatible with Python >= 3.X
+    #   cpXY-cpXY  -> compatible with Python X.Y only
+    if echo "$basename_url" | grep -qP '\-py3\d+-none\-'; then
+        req_py=$(echo "$basename_url" | grep -oP '\-py3\K\d+' | head -n1)
+        if [ "$PY_MINOR" -lt "$req_py" ]; then
+            continue
+        fi
+    elif echo "$basename_url" | grep -qP '\-cp\d+-cp\d+\-'; then
+        req_cpver=$(echo "$basename_url" | grep -oP '\-cp\K\d+' | head -n1)
+        if [ "$PY_VER" != "$req_cpver" ]; then
+            continue
+        fi
+    fi
+
+    # Extract manylinux version: manylinux_2_34 or manylinux2014
     if echo "$basename_url" | grep -qP 'manylinux_(\d+)_(\d+)'; then
         ml_major=$(echo "$basename_url" | grep -oP 'manylinux_\K\d+(?=_\d+)')
         ml_minor=$(echo "$basename_url" | grep -oP 'manylinux_\d+_\K\d+')
@@ -81,6 +103,7 @@ WHL_URL=$(echo "$RELEASE_JSON" | grep "browser_download_url" | grep "gwatch_${GP
     else
         continue
     fi
+
     # Check: wheel's libc requirement <= system libc (forward compatible)
     if [ "$ml_major" -lt "$LIBC_MAJOR" ] || { [ "$ml_major" -eq "$LIBC_MAJOR" ] && [ "$ml_minor" -le "$LIBC_MINOR" ]; }; then
         printf "%d %d %s\n" "$ml_major" "$ml_minor" "$url"
