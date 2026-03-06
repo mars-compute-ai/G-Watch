@@ -68,13 +68,13 @@ Expected to get: selected metric list (4-10), top runtime-dominant kernels, and 
 First inspect chip topology:
 
 ```bash
-gwatch profile show-topo --chip h100
+gwatch profile show-topo --chip gh100
 ```
 
 Then list candidates, for instance:
 
 ```bash
-gwatch profile list-metrics --chip h100 --unit smsp --subunit sass
+gwatch profile list-metrics --chip gh100 --unit smsp --subunit sass
 ```
 
 You can list metrics of other unit by your interest.
@@ -85,9 +85,9 @@ You could probably using grep to filter out specific content.
 Expand concrete metric names:
 
 ```bash
-gwatch profile show-metric-details --chip h100 --name <metric_base_name>
+gwatch profile show-metric-details --chip gh100 --name <metric_base_name>
 # or on some versions:
-gwatch profile show-metric-details --chip h100 --name <metric_base_name>
+gwatch profile show-metric-details --chip gh100 --name <metric_base_name>
 ```
 
 Pick a focused set (4-10 metrics) that can separate likely bottlenecks:
