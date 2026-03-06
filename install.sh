@@ -2,6 +2,13 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Detect if running inside a conda environment
+IN_CONDA=0
+if [ -n "$CONDA_PREFIX" ]; then
+    IN_CONDA=1
+    echo "Detected conda environment: $CONDA_DEFAULT_ENV"
+fi
+
 # Define a function to run commands with or without sudo
 run_cmd() {
     if [ "$(id -u)" -eq 0 ]; then
@@ -17,7 +24,9 @@ run_cmd() {
 }
 
 # 1. Detect OS and Install All System Dependencies
-if [ -f /etc/debian_version ]; then
+if [ "$IN_CONDA" -eq 1 ]; then
+    echo "Running in conda environment. Skipping system package installation."
+elif [ -f /etc/debian_version ]; then
     echo "Detected Ubuntu/Debian system. Installing dependencies..."
     run_cmd apt-get -o APT::Sandbox::User=root update
     run_cmd apt-get -o APT::Sandbox::User=root install -y \
@@ -27,7 +36,11 @@ if [ -f /etc/debian_version ]; then
 
 elif [ -f /etc/redhat-release ]; then
     echo "Detected CentOS/RHEL system. Installing dependencies..."
-    run_cmd yum install -y \
+    PKG_MGR="yum"
+    if command -v dnf > /dev/null 2>&1; then
+        PKG_MGR="dnf"
+    fi
+    run_cmd $PKG_MGR install -y \
         git curl python3 python3-pip elfutils-libelf-devel protobuf-compiler libwebsockets-devel numactl-devel
     # Update shared library cache
     run_cmd ldconfig
@@ -121,9 +134,15 @@ WHL_FILE=$(basename "$WHL_URL")
 echo "Downloading $WHL_FILE..."
 curl -L --progress-bar "$WHL_URL" -o "$WHL_FILE"
 
-# 5. Install using pip
+# 5. Install using pip (into current environment, not system-wide)
 echo "Installing $WHL_FILE..."
-run_cmd python3 -m pip install "$WHL_FILE" --break-system-packages
+if [ "$IN_CONDA" -eq 1 ]; then
+    python3 -m pip install --force-reinstall "$WHL_FILE"
+    python3 -m pip install tqdm
+else
+    run_cmd python3 -m pip install --force-reinstall "$WHL_FILE" --break-system-packages
+    run_cmd python3 -m pip install tqdm --break-system-packages
+fi
 
 # 6. Cleanup
 if [ $? -eq 0 ]; then
