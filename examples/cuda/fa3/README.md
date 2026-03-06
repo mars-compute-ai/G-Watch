@@ -66,9 +66,10 @@ This skill is automatically installed to your code agent when you install G-Watc
 
 ```bash
 /gwatch-cuda-optimize-fa3
-FA_PATH is @[THE PATH TO flash-attention]
-GWATCH_REPO_PATH is @[THE PATH TO G-Watch]
+FA_REPO_PATH is @xxx
+GWATCH_REPO_PATH is @xxx
 ```
+
 
 ## 6. Results
 
