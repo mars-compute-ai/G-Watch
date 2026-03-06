@@ -137,9 +137,11 @@ curl -L --progress-bar "$WHL_URL" -o "$WHL_FILE"
 # 5. Install using pip (into current environment, not system-wide)
 echo "Installing $WHL_FILE..."
 if [ "$IN_CONDA" -eq 1 ]; then
-    python3 -m pip install "$WHL_FILE"
+    python3 -m pip install --force-reinstall "$WHL_FILE"
+    python3 -m pip install tqdm
 else
-    run_cmd python3 -m pip install "$WHL_FILE" --break-system-packages
+    run_cmd python3 -m pip install --force-reinstall "$WHL_FILE" --break-system-packages
+    run_cmd python3 -m pip install tqdm --break-system-packages
 fi
 
 # 6. Cleanup
