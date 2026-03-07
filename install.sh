@@ -35,7 +35,26 @@ else
     echo "Unsupported OS. Please manually install: curl, libelf, protobuf, libwebsockets, and libnuma."
 fi
 
-# 2. Detect GPU Type
+# 2. Find a Python3 interpreter that has pip available
+PYTHON3=""
+for candidate in /usr/bin/python3 python3 python3.12 python3.11 python3.10 python3.9 python3.8; do
+    if command -v "$candidate" > /dev/null 2>&1; then
+        if "$candidate" -m pip --version > /dev/null 2>&1; then
+            PYTHON3="$candidate"
+            break
+        fi
+    fi
+done
+
+if [ -z "$PYTHON3" ]; then
+    echo "Error: Could not find a Python3 interpreter with pip installed."
+    echo "Please install pip (e.g., 'python3 -m ensurepip' or 'apt-get install python3-pip') and retry."
+    exit 1
+fi
+echo "Using Python: $PYTHON3 ($($PYTHON3 --version))"
+
+# 3. Detect GPU Type
+
 if command -v nvidia-smi > /dev/null 2>&1; then
     GPU_TYPE="cuda"
     echo "NVIDIA GPU detected. Preparing to install G-Watch (CUDA)..."
@@ -47,7 +66,7 @@ else
     read -r GPU_TYPE
 fi
 
-# 3. Fetch Latest Release Info from GitHub API
+# 4. Fetch Latest Release Info from GitHub API
 REPO="mars-compute-ai/G-Watch"
 API_URL="https://api.github.com/repos/$REPO/releases/latest"
 
@@ -66,8 +85,8 @@ echo "Detected system libc version: $LIBC_VERSION"
 ARCH=$(uname -m)
 
 # Detect Python version for wheel compatibility (e.g. 3.9 -> 39)
-PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
-PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
+PY_MAJOR=$($PYTHON3 -c "import sys; print(sys.version_info.major)")
+PY_MINOR=$($PYTHON3 -c "import sys; print(sys.version_info.minor)")
 PY_VER="${PY_MAJOR}${PY_MINOR}"
 echo "Detected Python version: ${PY_MAJOR}.${PY_MINOR}"
 
@@ -117,15 +136,19 @@ fi
 
 WHL_FILE=$(basename "$WHL_URL")
 
-# 4. Download with Progress Bar
+# 5. Download with Progress Bar
 echo "Downloading $WHL_FILE..."
 curl -L --progress-bar "$WHL_URL" -o "$WHL_FILE"
 
-# 5. Install using pip
+# 6. Install using pip
 echo "Installing $WHL_FILE..."
-run_cmd python3 -m pip install "$WHL_FILE" --break-system-packages
+PIP_ARGS="$WHL_FILE"
+if $PYTHON3 -m pip install --help 2>&1 | grep -q -- '--break-system-packages'; then
+    PIP_ARGS="$PIP_ARGS --break-system-packages"
+fi
+run_cmd $PYTHON3 -m pip install $PIP_ARGS
 
-# 6. Cleanup
+# 7. Cleanup
 if [ $? -eq 0 ]; then
     echo "Wheel installation successful."
     rm "$WHL_FILE"
@@ -134,7 +157,7 @@ else
     exit 1
 fi
 
-# 7. Install AI Agent Skills from GitHub
+# 8. Install AI Agent Skills from GitHub
 SKILLS_API_URL="https://api.github.com/repos/$REPO/contents/skills"
 CLAUDE_DIR=".claude/skills"
 CODEX_DIR=".codex/skills"
