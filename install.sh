@@ -71,35 +71,34 @@ PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
 PY_VER="${PY_MAJOR}${PY_MINOR}"
 echo "Detected Python version: ${PY_MAJOR}.${PY_MINOR}"
 
+# Map GPU type to the local version prefix used in wheel filenames:
+#   cuda -> "+cu"  (e.g. gwatch-0.0.2+cu128-cp39-cp39-manylinux_2_28_x86_64.whl)
+#   rocm -> "+rocm" (e.g. gwatch-0.0.2+rocm7.2-cp39-cp39-manylinux_2_28_x86_64.whl)
+if [ "$GPU_TYPE" = "cuda" ]; then
+    WHL_BACKEND_PATTERN="+cu"
+else
+    WHL_BACKEND_PATTERN="+rocm"
+fi
+
 # Get all matching wheel URLs for this GPU type and architecture,
 # filter by Python and libc compatibility, then pick the best match.
 RELEASE_JSON=$(curl -s "$API_URL")
-WHL_URL=$(echo "$RELEASE_JSON" | grep "browser_download_url" | grep "gwatch_${GPU_TYPE}_" | grep "_${ARCH}.whl" | cut -d '"' -f 4 | while read -r url; do
+WHL_URL=$(echo "$RELEASE_JSON" | grep "browser_download_url" | grep "${WHL_BACKEND_PATTERN}" | grep "_${ARCH}.whl" | cut -d '"' -f 4 | while read -r url; do
     basename_url=$(basename "$url")
 
     # Check Python version compatibility from the wheel tag:
-    #   py3X-none  -> compatible with Python >= 3.X
-    #   cpXY-cpXY  -> compatible with Python X.Y only
-    if echo "$basename_url" | grep -qP '\-py3\d+-none\-'; then
-        req_py=$(echo "$basename_url" | grep -oP '\-py3\K\d+' | head -n1)
-        if [ "$PY_MINOR" -lt "$req_py" ]; then
-            continue
-        fi
-    elif echo "$basename_url" | grep -qP '\-cp\d+-cp\d+\-'; then
+    #   cpXY-cpXY -> exact CPython version match required
+    if echo "$basename_url" | grep -qP '\-cp\d+-cp\d+\-'; then
         req_cpver=$(echo "$basename_url" | grep -oP '\-cp\K\d+' | head -n1)
         if [ "$PY_VER" != "$req_cpver" ]; then
             continue
         fi
     fi
 
-    # Extract manylinux version: manylinux_2_34 or manylinux2014
+    # Extract manylinux version: manylinux_2_28 etc.
     if echo "$basename_url" | grep -qP 'manylinux_(\d+)_(\d+)'; then
         ml_major=$(echo "$basename_url" | grep -oP 'manylinux_\K\d+(?=_\d+)')
         ml_minor=$(echo "$basename_url" | grep -oP 'manylinux_\d+_\K\d+')
-    elif echo "$basename_url" | grep -qP 'manylinux(\d+)'; then
-        # Legacy format: manylinux2014 -> glibc 2.17
-        ml_major=2
-        ml_minor=17
     else
         continue
     fi
